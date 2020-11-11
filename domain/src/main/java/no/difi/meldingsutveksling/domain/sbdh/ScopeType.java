@@ -1,6 +1,7 @@
 package no.difi.meldingsutveksling.domain.sbdh;
 
 public enum ScopeType {
+    SIGNED_JWT("SignedJWT"),
     JOURNALPOST_ID("JournalpostId"),
     CONVERSATION_ID("ConversationId"),
     SENDER_REF("SenderRef"),

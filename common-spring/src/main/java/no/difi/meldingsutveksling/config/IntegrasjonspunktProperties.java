@@ -280,6 +280,7 @@ public class IntegrasjonspunktProperties {
         private boolean mailErrorStatus;
         private boolean retryOnDeadLock;
         private boolean cryptoMessagePersister;
+        private boolean onBehalfMode;
         private Set<ServiceIdentifier> statusQueueIncludes = Sets.newHashSet();
 
         /**

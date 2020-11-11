@@ -48,6 +48,7 @@ public class OidcTokenClient {
             "global/sertifikat.read",
             "global/navn.read",
             "global/postadresse.read");
+    private static final String SCOPE_DPO_DELEGATED = "move:dpo.delegated";
 
     private final IntegrasjonspunktProperties props;
 
@@ -100,22 +101,24 @@ public class OidcTokenClient {
         if (!StringUtils.hasText(clientId)) {
             clientId = CLIENT_ID_PREFIX + props.getOrg().getNumber();
         }
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                 .audience(props.getOidc().getAudience())
                 .issuer(clientId)
                 .claim("scope", getCurrentScopes())
                 .jwtID(UUID.randomUUID().toString())
                 .issueTime(Date.from(OffsetDateTime.now(DEFAULT_ZONE_ID).toInstant()))
-                .expirationTime(Date.from(OffsetDateTime.now(DEFAULT_ZONE_ID).toInstant().plusSeconds(120)))
-                .build();
+                .expirationTime(Date.from(OffsetDateTime.now(DEFAULT_ZONE_ID).toInstant().plusSeconds(120)));
+        if (props.getFeature().isOnBehalfMode()) {
+            claimsBuilder.claim("consumer_org", props.getOrg().getNumber());
+        }
+
+        JWTClaimsSet claims = claimsBuilder.build();
+        SignedJWT signedJWT = new SignedJWT(jwsHeader, claims);
 
         RSASSASigner signer = new RSASSASigner(nokkel.loadPrivateKey());
-
         if (nokkel.shouldLockProvider()) {
             signer.getJCAContext().setProvider(nokkel.getKeyStore().getProvider());
         }
-
-        SignedJWT signedJWT = new SignedJWT(jwsHeader, claims);
         try {
             signedJWT.sign(signer);
         } catch (JOSEException e) {
@@ -129,22 +132,26 @@ public class OidcTokenClient {
     }
 
     public String getCurrentScopes() {
-
         ArrayList<String> scopeList = new ArrayList<>();
-        if (props.getFeature().isEnableDPO()) {
-            scopeList.add(SCOPE_DPO);
-        }
-        if (props.getFeature().isEnableDPE()) {
-            scopeList.add(SCOPE_DPE);
-        }
-        if (props.getFeature().isEnableDPV()) {
-            scopeList.add(SCOPE_DPV);
-        }
-        if (props.getFeature().isEnableDPF()) {
-            scopeList.add(SCOPE_DPF);
-        }
-        if (props.getFeature().isEnableDPI()) {
-            scopeList.addAll(SCOPES_DPI);
+
+        if (props.getFeature().isOnBehalfMode()) {
+            scopeList.add(SCOPE_DPO_DELEGATED);
+        } else {
+            if (props.getFeature().isEnableDPO()) {
+                scopeList.add(SCOPE_DPO);
+            }
+            if (props.getFeature().isEnableDPE()) {
+                scopeList.add(SCOPE_DPE);
+            }
+            if (props.getFeature().isEnableDPV()) {
+                scopeList.add(SCOPE_DPV);
+            }
+            if (props.getFeature().isEnableDPF()) {
+                scopeList.add(SCOPE_DPF);
+            }
+            if (props.getFeature().isEnableDPI()) {
+                scopeList.addAll(SCOPES_DPI);
+            }
         }
 
         return scopeList.stream().reduce((a, b) -> a + " " + b).orElse("");

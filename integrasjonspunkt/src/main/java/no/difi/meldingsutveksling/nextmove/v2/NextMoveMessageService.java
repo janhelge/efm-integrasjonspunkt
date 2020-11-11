@@ -11,6 +11,10 @@ import no.difi.meldingsutveksling.api.ConversationService;
 import no.difi.meldingsutveksling.api.MessagePersister;
 import no.difi.meldingsutveksling.api.OptionalCryptoMessagePersister;
 import no.difi.meldingsutveksling.arkivmelding.ArkivmeldingUtil;
+import no.difi.meldingsutveksling.auth.OidcTokenClient;
+import no.difi.meldingsutveksling.config.IntegrasjonspunktProperties;
+import no.difi.meldingsutveksling.domain.sbdh.Scope;
+import no.difi.meldingsutveksling.domain.sbdh.ScopeType;
 import no.difi.meldingsutveksling.domain.sbdh.StandardBusinessDocument;
 import no.difi.meldingsutveksling.exceptions.MessageNotFoundException;
 import no.difi.meldingsutveksling.exceptions.MessagePersistException;
@@ -53,6 +57,8 @@ public class NextMoveMessageService {
     private final ArkivmeldingUtil arkivmeldingUtil;
     private final MessagePersister messagePersister;
     private final BusinessMessageFileRepository businessMessageFileRepository;
+    private final IntegrasjonspunktProperties properties;
+    private final OidcTokenClient oidcTokenClient;
 
     @Transactional(readOnly = true)
     public NextMoveOutMessage getMessage(String messageId) {
@@ -161,6 +167,13 @@ public class NextMoveMessageService {
     @Transactional(noRollbackFor = TimeToLiveException.class)
     public void sendMessage(NextMoveOutMessage message) {
         validator.validate(message);
+        if (properties.getFeature().isOnBehalfMode()) {
+            Scope jwtScope = new Scope()
+                    .setType(ScopeType.SIGNED_JWT.toString())
+                    .setIdentifier(oidcTokenClient.generateJWT())
+                    .setInstanceIdentifier(message.getMessageId());
+            message.getSbd().getScopes().add(jwtScope);
+        }
         internalQueue.enqueueNextMove(message);
     }
 
