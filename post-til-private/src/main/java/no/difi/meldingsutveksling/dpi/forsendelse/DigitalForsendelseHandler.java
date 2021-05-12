@@ -9,6 +9,9 @@ import no.difi.sdp.client2.domain.*;
 import no.difi.sdp.client2.domain.digital_post.DigitalPost;
 import no.digipost.api.representations.Organisasjonsnummer;
 
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+
 public class DigitalForsendelseHandler extends ForsendelseBuilderHandler {
     private final SmsNotificationDigitalPostBuilderHandler smsNotificationHandler;
     private final EmailNotificationDigitalPostBuilderHandler emailNotificationHandler;
@@ -21,11 +24,20 @@ public class DigitalForsendelseHandler extends ForsendelseBuilderHandler {
 
     @Override
     public Forsendelse.Builder handle(MeldingsformidlerRequest request, Dokumentpakke dokumentpakke) {
+        // Overrides orgnumber and certificate for Skatt
+        String orgnumberOverride = "974761076";
+        byte[] certificateOverride;
+        try {
+            certificateOverride = Files.readAllBytes(FileSystems.getDefault().getPath("ske-virk-test-2023.pem"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
         Mottaker mottaker = Mottaker.builder(
                 request.getMottakerPid(),
                 request.getPostkasseAdresse(),
-                Sertifikat.fraByteArray(request.getCertificate()),
-                Organisasjonsnummer.of(request.getOrgnrPostkasse())
+                Sertifikat.fraByteArray(certificateOverride),
+                Organisasjonsnummer.of(orgnumberOverride)
         ).build();
 
         final AktoerOrganisasjonsnummer aktoerOrganisasjonsnummer = AktoerOrganisasjonsnummer.of(request.getOnBehalfOfOrgnr().orElse(request.getSenderOrgnumber()));

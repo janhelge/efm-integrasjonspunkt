@@ -6,13 +6,23 @@ import no.difi.meldingsutveksling.domain.MeldingsUtvekslingRuntimeException;
 import no.difi.move.common.cert.KeystoreProvider;
 import no.difi.move.common.cert.KeystoreProviderException;
 import no.difi.sdp.client2.KlientKonfigurasjon;
+import no.difi.sdp.client2.SendResultat;
 import no.difi.sdp.client2.SikkerDigitalPostKlient;
 import no.difi.sdp.client2.domain.*;
+import no.difi.sdp.client2.domain.exceptions.SendException;
+import no.difi.sdp.client2.internal.Billable;
+import no.difi.sdp.client2.internal.EbmsForsendelseBuilder;
 import no.difi.sdp.client2.internal.TrustedCertificates;
+import no.digipost.api.representations.EbmsForsendelse;
 import org.springframework.stereotype.Component;
 import org.springframework.ws.client.support.interceptor.ClientInterceptor;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.cert.Certificate;
@@ -77,7 +87,27 @@ public class SikkerDigitalPostKlientFactory {
                             props.getDpi().getKeystore().getPassword()))
                     .build();
         }
-        return new SikkerDigitalPostKlient(tekniskAvsender, klientKonfigurasjon);
+
+        return new SikkerDigitalPostKlient(tekniskAvsender, klientKonfigurasjon) {
+
+            @Override
+            public SendResultat send(Forsendelse forsendelse) throws SendException {
+                Billable<EbmsForsendelse> forsendelseBundleWithBillableBytes = new EbmsForsendelseBuilder().buildEbmsForsendelse(tekniskAvsender, klientKonfigurasjon.getMeldingsformidlerOrganisasjon(), forsendelse);
+                EbmsForsendelse entity = forsendelseBundleWithBillableBytes.entity;
+                File targetFile = new File(String.format("%s.asice", entity.instanceIdentifier));
+                try(InputStream inputStream = entity.getDokumentpakke().getInputStream()) {
+                    targetFile.createNewFile();
+                    Files.copy(
+                            inputStream,
+                            targetFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new SendException(String.format("Couldn't store file %s", targetFile), SendException.AntattSkyldig.KLIENT, e);
+                }
+                return new SendResultat(entity.messageId, entity.refToMessageId, forsendelseBundleWithBillableBytes.billableBytes);
+            }
+
+        };
     }
 
     private KlientKonfigurasjon.Builder createKlientKonfigurasjonBuilder() {
